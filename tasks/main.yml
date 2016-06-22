@@ -1,0 +1,123 @@
+---
+- hosts: all
+
+  gather_facts: yes
+  connection: ssh
+  #include_vars: "../vars/main.yml"
+
+  tasks:
+  - name: Install packages Debian based distros.
+    apt: name={{item}} update_cache=yes state=latest
+    with_items:
+      - git-core
+      - python-dev
+      - libjpeg-dev
+      - libpq-dev
+      - libxml2-dev
+      - libxslt-dev
+      - rabbitmq-server
+      - redis-server
+      - tidy
+      - apache2-mpm-prefork
+      - libapache2-mod-wsgi
+      - git
+      - libxml2
+      - libxml2-utils
+      - python-lxml
+      - python3-lxml
+      - libxslt1-dev
+      - python-libxslt1
+      - libxslt1.1
+    become: yes
+    become_user: root
+    when: ansible_distribution == 'Debian'
+
+  - name: Save /usr/local/src
+    stat: path=/usr/local/src
+    register: src_dir
+
+  - name: Create dir /usr/local/src
+    file: path=/usr/local/src state=directory owner=root group=root mode=0775 recurse=no
+    when: src_dir.stat.exists == False
+    become: yes
+    become_user: root
+
+  - name: Save /usr/local/src/booktype
+    stat: path=/usr/local/src/booktype
+    register: booktype3_dir
+
+  - name: Create dir /usr/local/src/booktype
+    file: path=/usr/local/src/booktype state=directory owner=www-data group=www-data mode=0775 recurse=no
+    when: booktype3_dir.stat.exists == False
+    become: yes
+    become_user: root
+
+  - name: Clone booktype.
+    git: repo=https://github.com/sourcefabric/Booktype.git version=2.0 depth=1 dest=/usr/local/src/booktype update=no
+    become: yes
+    become_user: root
+
+  - name: Save location of pip binary
+    stat: path=/usr/local/bin/pip
+    register: pip_bin
+
+  - name: Save /var/www/booktype
+    stat: path=/var/www/booktype
+    register: booktype_dir
+
+  - name: Download get-pip.py
+    get_url: url=https://bootstrap.pypa.io/get-pip.py dest=/tmp/get-pip.py
+    when: pip_bin.stat.exists == False
+
+  - name: Download and install pip
+    shell: 'python /tmp/get-pip.py'
+    when: pip_bin.stat.exists == False
+    become: yes
+    become_user: root
+
+  - name: Install Booktype dev requirements
+    shell: 'pip install -r /usr/local/src/booktype/requirements/dev.txt'
+    when: booktype_dir.stat.exists == False
+    become: yes
+    become_user: root
+
+  - name: Install Booktype prod requirements
+    shell: 'pip install -r /usr/local/src/booktype/requirements/prod.txt'
+    when: booktype_dir.stat.exists == False
+    become: yes
+    become_user: root
+
+  - name: Save /var/www/booktype
+    stat: path=/var/www/booktype
+    register: booktype1_dir
+
+  - name: Create dir /var/www/booktype
+    file: path=/var/www/booktype state=directory owner=www-data group=www-data mode=0775 recurse=no
+    when: booktype1_dir.stat.exists == False
+    become: yes
+    become_user: root
+
+  - name: Save /usr/local/src/booktype
+    stat: path=/usr/local/src/booktype
+    register: booktype2_dir
+
+  - name: Set perms for files in /usr/local/src/booktype
+    file: path=/usr/local/src/booktype state=directory owner=www-data group=www-data mode=0775 recurse=no
+    when: booktype2_dir.stat.exists == False
+    become: yes
+    become_user: root
+
+  - name: Save /var/www/booktype/instance1
+    stat: path=/var/www/booktype/instance1
+    register: instance1_dir
+
+  - name: Generate Booktype instance
+    shell: 'id; ./createbooktype -p dev --check-versions --database postgresql /var/www/booktype/instance1'
+    when: instance1_dir.stat.exists == False
+    args:
+      chdir: /usr/local/src/booktype/scripts
+      executable: /bin/bash
+    become: yes
+    become_user: www-data
+    vars:
+      ansible_ssh_pipelining: yes
